@@ -66,6 +66,25 @@ func (q *Queries) GetUser(ctx context.Context, name string) (User, error) {
 	return i, err
 }
 
+const getUserByUID = `-- name: GetUserByUID :one
+
+SELECT id, created_at, updated_at, name
+FROM users
+WHERE id=$1
+`
+
+func (q *Queries) GetUserByUID(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByUID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
 const getUsers = `-- name: GetUsers :many
 SELECT id, created_at, updated_at, name FROM users
 `
@@ -99,7 +118,7 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 }
 
 const truncateTable = `-- name: TruncateTable :exec
-TRUNCATE TABLE users
+TRUNCATE TABLE users CASCADE
 `
 
 func (q *Queries) TruncateTable(ctx context.Context) error {
