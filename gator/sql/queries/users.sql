@@ -7,3 +7,16 @@ VALUES (
 	    $4
 	)
 	RETURNING *;
+
+-- name: GetUser :one
+
+SELECT *
+FROM users
+WHERE name=$1;
+
+-- name: TruncateTable :exec
+TRUNCATE TABLE users;
+
+-- name: GetUsers :many
+SELECT * FROM users;
+
