@@ -38,11 +38,11 @@
 - `reset` truncates all application data in postgres
 - `users` displays registered users, emphasizing currently logged in user
 - `agg {duration}` starts post aggregation for a set time
-        - valid values for duration are like 1h, 1m, 1s, 4s, 3d...
+  - valid values for duration are like 1h, 1m, 1s, 4s, 3d...
 - `addfeed {url}` adds a feed to the database by feed URL
 - `feeds` prints out currently available feeds
 - `follow {url}` follows a feed by url
 - `following` prints out what feeds the current user is following
 - `unfollow {url}` unfollows a feed by url
 - `browse {optional: limit}` displays up to limit # of posts.
-        - If limit is ommitted defaults to 2
+  - If limit is ommitted defaults to 2
