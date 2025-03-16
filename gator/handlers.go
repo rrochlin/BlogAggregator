@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/rrochlin/BlogAggregator/gator/internal/database"
-	"time"
 )
 
 func handlerLogin(s *state, cmd command) error {
@@ -76,16 +79,98 @@ func handlerReset(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	// if len(cmd.args) == 0 {
-	// 	return fmt.Errorf("Missing Name for %v\n", cmd.name)
-	// }
-	// feed, err := fethFeed(context.Background(), cmd.args[0])
-	url := "https://www.wagslane.dev/index.xml"
-	feed, err := fethFeed(context.Background(), url)
+	if len(cmd.args) != 1 {
+		return fmt.Errorf("agg takes 1 argument: time between requests")
+	}
+
+	timeBetweenReqs, err := time.ParseDuration(cmd.args[0])
 	if err != nil {
 		return err
 	}
-	fmt.Printf("feed: %v\n", feed)
+
+	ticker := time.NewTicker(timeBetweenReqs)
+	for ; ; <-ticker.C {
+		err = scrapeFeeds(s)
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func scrapeFeeds(s *state) error {
+	feed, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return err
+	}
+	_, err = s.db.MarkFeedFetched(context.Background(), feed.ID)
+	if err != nil {
+		return err
+	}
+
+	newFeed, err := fetchFeed(context.Background(), feed.Url)
+	if err != nil {
+		return err
+	}
+
+	multipleUrlErr := "pq: duplicate key value violates unique constraint \"posts_url_key\""
+	for _, item := range newFeed.Channel.Item {
+		publishDate := sql.NullTime{}
+		if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+			publishDate = sql.NullTime{
+				Time:  t,
+				Valid: true,
+			}
+		}
+
+		_, err = s.db.CreatePost(
+			context.Background(),
+			database.CreatePostParams{
+				ID:          uuid.New(),
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+				Title:       item.Title,
+				Url:         item.Link,
+				Description: item.Description,
+				PublishedAt: publishDate,
+				FeedID:      feed.ID,
+			})
+		if err != nil && err.Error() != multipleUrlErr {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	var limit int
+	var err error
+
+	if len(cmd.args) == 0 {
+		limit = 2
+	} else {
+		limit, err = strconv.Atoi(cmd.args[0])
+		if err != nil {
+			return err
+		}
+	}
+
+	posts, err := s.db.GetPostsForUser(
+		context.Background(),
+		database.GetPostsForUserParams{
+			UserID: user.ID,
+			Limit:  int32(limit),
+		})
+	if err != nil {
+		return err
+	}
+
+	for _, post := range posts {
+		fmt.Printf("post.Title: %v\n", post.Title)
+		fmt.Printf("post.Description: %v\n", post.Description)
+		fmt.Printf("post.PublishedAt: %v\n", post.PublishedAt)
+	}
+
 	return nil
 }
 
